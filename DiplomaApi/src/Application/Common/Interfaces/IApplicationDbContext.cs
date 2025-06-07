@@ -8,5 +8,9 @@ public interface IApplicationDbContext
 
     DbSet<TodoItem> TodoItems { get; }
 
-    Task<int> SaveChangesAsync(CancellationToken cancellationToken);
+    /// <summary> Події, що приходять з MQTT-датчиків </summary>
+    DbSet<Event> Events { get; }
+
+    Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
+    
 }
