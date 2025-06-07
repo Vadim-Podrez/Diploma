@@ -1,0 +1,31 @@
+name: myproject
+services:
+  mqtt:
+    image: eclipse-mosquitto
+    container_name: mqtt-broker
+    ports:
+      - 1883:1883
+      - 9001:9001
+
+  postgres:
+    image: postgres:latest
+    container_name: drone-db
+    environment:
+      POSTGRES_USER: drone
+      POSTGRES_PASSWORD: drone123
+      POSTGRES_DB: dronedb
+    ports:
+      - 5432:5432
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  yolov5-api:
+    image: ultralytics/yolov5:latest
+    container_name: yolov5-api
+    command: >
+      python detect.py --source rtsp://camera_stream --weights yolov5s.pt
+    ports:
+      - 5000:5000
+
+volumes:
+  db_data:
