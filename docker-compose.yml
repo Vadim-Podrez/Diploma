@@ -32,15 +32,14 @@ services:
     environment:
       ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=dronedb;Username=drone;Password=drone123"
     ports:
-      - "5000:8080"
+      - "8080:8080"
 
-  yolov5-api:
-    image: ultralytics/yolov5:latest
-    container_name: yolov5-api
-    command: >
-      python detect.py --source rtsp://camera_stream --weights yolov5s.pt
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
     ports:
-      - "5001:5000"    
+      - "8081:80"   # dashboard буде на localhost:8081
 
 volumes:
   pgdata:   {}

@@ -11,6 +11,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using MQTTnet;
 using MQTTnet.Client;
+using NpgsqlTypes;
 
 
 namespace DiplomaApi.Infrastructure.Mqtt;
@@ -66,11 +67,25 @@ public sealed class MqttListener : BackgroundService
                 var db  = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
                 var hub = scope.ServiceProvider.GetRequiredService<IHubContext<EventHub>>();
 
+                
+                NpgsqlPoint coords = default;
+                if (dto.Payload.TryGetProperty("coords", out var coordsProp) && coordsProp.GetArrayLength() == 2)
+                {
+                    var lat = coordsProp[0].GetDouble();
+                    var lng = coordsProp[1].GetDouble();
+                    coords = new NpgsqlPoint(lat, lng);
+                }
+                else
+                {
+                    coords = new NpgsqlPoint(0, 0); // або значення за замовчуванням
+                }
+                
                 db.Events.Add(new Event
                 {
                     SensorId  = dto.SensorId,
                     Timestamp = DateTime.UtcNow,
-                    Payload   = dto.Payload
+                    Payload   = dto.Payload,
+                    Coords    = coords
                 });
                 await db.SaveChangesAsync(ct);
 

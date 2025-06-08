@@ -1103,27 +1103,9 @@
   </script>
   <!--end::Script-->
 
-  <!-- ТУТ ОСНОВА -->
-  <!-- <script>
-  document.addEventListener("DOMContentLoaded", function() {
-    var map = L.map('drone-map').setView([50.4501, 30.5234], 11); // Координати Києва
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
-
-    // Демо-маркер (наприклад, "Дрон виявлено")
-    var marker = L.marker([50.4501, 30.5234]).addTo(map);
-    marker.bindPopup('<b>Подія:</b> RF-виявлення<br><b>Координати:</b> 50.4501, 30.5234').openPopup();
-
-    // Тут можна циклом додавати події з API
-  });
-</script> -->
-
-  <!-- ТУТ ТЕСТОВИЙ -->
-
   <script>
     document.addEventListener("DOMContentLoaded", function () {
-      var map = L.map('drone-map').setView([50.4501, 30.5234], 11);
+      var map = L.map('drone-map').setView([50.4501, 30.5234], 11); // Координати Києва
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap contributors'
       }).addTo(map);
@@ -1161,7 +1143,7 @@
   <script>
   // Підключення до SignalR (тепер глобальний клас window.signalR)
   const connection = new signalR.HubConnectionBuilder()
-    .withUrl('http://localhost:5000/eventHub') // або твій адрес API
+    .withUrl("http://localhost:8080/eventHub") // ← тут виправ на реальний порт!
     .configureLogging(signalR.LogLevel.Information)
     .withAutomaticReconnect()
     .build();

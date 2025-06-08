@@ -18,12 +18,13 @@ builder.Services.AddHostedService<MqttListener>();
 
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("dash", policy =>
+    options.AddDefaultPolicy(policy =>
     {
-        policy.WithOrigins("http://localhost:8080", "http://127.0.0.1:8080")
+        policy
             .AllowAnyHeader()
             .AllowAnyMethod()
-            .AllowCredentials();
+            .SetIsOriginAllowed(_ => true) // Дозволити будь-який origin для тестів
+            .AllowCredentials();           // ВАЖЛИВО для SignalR!
     });
 });
 
@@ -37,11 +38,10 @@ if (app.Environment.IsDevelopment())
 
 if (!app.Environment.IsEnvironment("Migration"))
 {
-    await app.InitialiseDatabaseAsync();   // ← залишилось як було
+    await app.InitialiseDatabaseAsync();
 }
 else
 {
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
 
@@ -58,7 +58,7 @@ app.UseSwaggerUi(settings =>
 
 app.UseExceptionHandler(options => { });
 
-app.UseCors("dash");
+app.UseCors();
 
 app.MapHub<EventHub>("/eventHub");
 
