@@ -93,5 +93,8 @@
     "terser": "^5.37.0",
     "tslib": "^2.8.1",
     "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@microsoft/signalr": "^8.0.7"
   }
 }

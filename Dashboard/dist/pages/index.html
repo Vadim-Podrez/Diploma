@@ -41,6 +41,9 @@
   <!-- jsvectormap -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsvectormap@1.5.3/dist/css/jsvectormap.min.css"
     integrity="sha256-+uGLJmmTKOqBr+2E6KDYs/NRsHxSkONXFHUL0fy2O/4=" crossorigin="anonymous" />
+
+  <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@7.0.5/dist/browser/signalr.min.js"></script>
+
 </head>
 <!--end::Head-->
 <!--begin::Body-->
@@ -1155,6 +1158,30 @@
     });
   </script>
 
+  <script>
+  // Підключення до SignalR (тепер глобальний клас window.signalR)
+  const connection = new signalR.HubConnectionBuilder()
+    .withUrl('http://localhost:5000/eventHub') // або твій адрес API
+    .configureLogging(signalR.LogLevel.Information)
+    .withAutomaticReconnect()
+    .build();
+
+  connection.on('newEvent', ev => {
+    console.log('New event:', ev);
+    // Тут додай код для оновлення карти/графіків
+  });
+
+  async function startRealtime() {
+    try {
+      await connection.start();
+      console.log('SignalR connected!');
+    } catch (error) {
+      console.error('SignalR error:', error);
+    }
+  }
+
+  startRealtime();
+</script>
 
 </body>
 <!--end::Body-->

@@ -1,6 +1,9 @@
+using DiplomaApi.Application.Common.Interfaces;
+using DiplomaApi.Application.Events;
 using DiplomaApi.Infrastructure.Data;
 using DiplomaApi.Web.Hubs;
 using  DiplomaApi.Infrastructure.Mqtt;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,6 +15,17 @@ builder.AddWebServices();
 
 builder.Services.AddSignalR();
 builder.Services.AddHostedService<MqttListener>();
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("dash", policy =>
+    {
+        policy.WithOrigins("http://localhost:8080", "http://127.0.0.1:8080")
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
+    });
+});
 
 var app = builder.Build();
 
@@ -44,11 +58,26 @@ app.UseSwaggerUi(settings =>
 
 app.UseExceptionHandler(options => { });
 
+app.UseCors("dash");
+
 app.MapHub<EventHub>("/eventHub");
 
 app.Map("/", () => Results.Redirect("/api"));
 
 app.MapEndpoints();
+
+app.MapGet("/api/events/latest/{n:int}", async (int n, IApplicationDbContext db) =>
+    {
+        var events = await db.Events
+            .OrderByDescending(e => e.Timestamp)
+            .Take(n)
+            .Select(e => new EventVm(e.Id, e.SensorId, e.Timestamp, e.Payload))
+            .ToListAsync();
+
+        return Results.Ok(events);
+    })
+    .WithName("LatestEvents")
+    .WithOpenApi();
 
 app.Run();
 
