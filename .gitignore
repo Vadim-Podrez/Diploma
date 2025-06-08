@@ -1,0 +1,5 @@
+# пакети
+node_modules/
+# збірка
+dist/
+.cache/
