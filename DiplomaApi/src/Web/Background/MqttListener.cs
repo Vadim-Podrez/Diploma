@@ -53,10 +53,13 @@ public sealed class MqttListener : BackgroundService
         {
             try
             {
+                
                 string json = Encoding.UTF8.GetString(e.ApplicationMessage.PayloadSegment);
+                _logger.LogInformation("Received MQTT raw payload: {Json}", json); 
+
                 var dto = JsonSerializer.Deserialize<EventDto>(
-                    json,
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    json, 
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }); 
                 if (dto is null)                         // ← захист від некоректного JSON  
                 {
                     _logger.LogWarning("Received invalid MQTT payload: {Json}", json);
@@ -68,7 +71,7 @@ public sealed class MqttListener : BackgroundService
                 var hub = scope.ServiceProvider.GetRequiredService<IHubContext<EventHub>>();
 
                 
-                NpgsqlPoint coords = default;
+                /*NpgsqlPoint coords = default;
                 if (dto.Payload.TryGetProperty("coords", out var coordsProp) && coordsProp.GetArrayLength() == 2)
                 {
                     var lat = coordsProp[0].GetDouble();
@@ -77,15 +80,15 @@ public sealed class MqttListener : BackgroundService
                 }
                 else
                 {
-                    coords = new NpgsqlPoint(0, 0); // або значення за замовчуванням
-                }
+                    coords = new NpgsqlPoint(0, 0);
+                }*/
                 
                 db.Events.Add(new Event
                 {
                     SensorId  = dto.SensorId,
                     Timestamp = DateTime.UtcNow,
                     Payload   = dto.Payload,
-                    Coords    = coords
+                    Coords    = dto.Coords
                 });
                 await db.SaveChangesAsync(ct);
 

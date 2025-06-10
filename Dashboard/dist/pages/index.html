@@ -1011,7 +1011,7 @@
     };
 
     // World map by jsVectorMap
-    const map = new jsVectorMap({
+    const jsmap = new jsVectorMap({
       selector: '#world-map',
       map: 'world',
     });
@@ -1103,7 +1103,7 @@
   </script>
   <!--end::Script-->
 
-  <script>
+  <!-- <script>
     document.addEventListener("DOMContentLoaded", function () {
       var map = L.map('drone-map').setView([50.4501, 30.5234], 11); // Координати Києва
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -1135,22 +1135,49 @@
       // Додати першу мітку одразу
       addDroneDetection();
 
-      // Додавати нову мітку кожні 5 секунд
-      setInterval(addDroneDetection, 5000);
+      // Додавати нову мітку кожні 12 секунд
+      setInterval(addDroneDetection, 12000);
     });
-  </script>
+  </script> -->
+  
 
   <script>
-  // Підключення до SignalR (тепер глобальний клас window.signalR)
+  // Створити глобальну змінну для карти
+  let map;
+
+  // Ініціалізувати карту після завантаження DOM
+  document.addEventListener("DOMContentLoaded", function () {
+    map = L.map('drone-map').setView([50.4501, 30.5234], 11); // Київ
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+  });
+
+  // Підключення до SignalR
   const connection = new signalR.HubConnectionBuilder()
-    .withUrl("http://localhost:8080/eventHub") // ← тут виправ на реальний порт!
+    .withUrl("http://localhost:8080/eventHub")
     .configureLogging(signalR.LogLevel.Information)
     .withAutomaticReconnect()
     .build();
 
   connection.on('newEvent', ev => {
     console.log('New event:', ev);
-    // Тут додай код для оновлення карти/графіків
+
+    const lat = ev.coords.x;
+    const lng = ev.coords.y;
+    const { type, signal, alarm } = ev.payload;
+    const sensorId = ev.sensorId;
+
+    const time = new Date().toLocaleTimeString();
+
+    const marker = L.marker([lat, lng]).addTo(map);
+    marker.bindPopup(`
+      <b>Подія:</b> ${type.toUpperCase()}<br>
+      <b>Сигнал:</b> ${signal}<br>
+      <b>Alarm:</b> ${alarm}<br>
+      <b>Sensor ID:</b> ${sensorId}<br>
+      <b>Час:</b> ${time}
+    `);
   });
 
   async function startRealtime() {

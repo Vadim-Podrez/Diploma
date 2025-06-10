@@ -10,11 +10,11 @@ TOPIC = "rf/events/test"
 def random_coords():
     lat = round(random.uniform(50.34, 50.52), 6)
     lng = round(random.uniform(30.40, 30.66), 6)
-    return [lat, lng]
+    return {"X": lat, "Y": lng}
 
 for i in range(5):  # 10 подій, або зроби while True для нескінченних
     msg = {
-        "sensorId": f"test-{random.randint(1,5)}",
+        "sensorId": random.randint(1, 5),
         "coords": random_coords(),
         "payload": {
             "type": random.choice(["rf", "audio", "video"]),
@@ -22,6 +22,6 @@ for i in range(5):  # 10 подій, або зроби while True для нес�
             "alarm": random.choice([True, False])
         }
     }
-    publish.single(TOPIC, payload=json.dumps(msg), hostname=BROKER, port=PORT)
+    publish.single("rf/events/test", json.dumps(msg), hostname="localhost", port=1883)
     print("Sent:", msg)
     time.sleep(2)
