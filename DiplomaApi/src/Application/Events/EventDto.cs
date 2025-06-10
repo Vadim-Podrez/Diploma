@@ -3,5 +3,5 @@ using NpgsqlTypes;
 
 namespace DiplomaApi.Application.Events;
 
-public sealed record EventDto(string SensorId, NpgsqlPoint Coords, JsonElement Payload);
+public sealed record EventDto(int SensorId, NpgsqlPoint Coords, JsonElement Payload);
 

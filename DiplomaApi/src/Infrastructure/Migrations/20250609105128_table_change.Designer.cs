@@ -11,11 +11,11 @@ using NpgsqlTypes;
 
 #nullable disable
 
-namespace DiplomaApi.Infrastructure.Data.Migrations
+namespace DiplomaApi.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20250608212124_AddCoordsToEvents")]
-    partial class AddCoordsToEvents
+    [Migration("20250609105128_table_change")]
+    partial class table_change
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -29,11 +29,11 @@ namespace DiplomaApi.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("DiplomaApi.Domain.Entities.Event", b =>
                 {
-                    b.Property<long>("Id")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
+                        .HasColumnType("integer");
 
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<NpgsqlPoint>("Coords")
                         .HasColumnType("point");
@@ -41,17 +41,64 @@ namespace DiplomaApi.Infrastructure.Data.Migrations
                     b.Property<JsonElement>("Payload")
                         .HasColumnType("jsonb");
 
-                    b.Property<string>("SensorId")
-                        .IsRequired()
+                    b.Property<int>("SensorId")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("integer");
 
                     b.Property<DateTime>("Timestamp")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
-                    b.ToTable("events", (string)null);
+                    b.HasIndex("SensorId");
+
+                    b.ToTable("Events");
+                });
+
+            modelBuilder.Entity("DiplomaApi.Domain.Entities.Sensor", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<NpgsqlPoint>("Coords")
+                        .HasColumnType("point");
+
+                    b.Property<float>("Coverage")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("real")
+                        .HasDefaultValue(0f);
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<float?>("Direction")
+                        .HasColumnType("real");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("online");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Sensors");
                 });
 
             modelBuilder.Entity("DiplomaApi.Domain.Entities.TodoItem", b =>
@@ -327,6 +374,17 @@ namespace DiplomaApi.Infrastructure.Data.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("DiplomaApi.Domain.Entities.Event", b =>
+                {
+                    b.HasOne("DiplomaApi.Domain.Entities.Sensor", "Sensor")
+                        .WithMany("Events")
+                        .HasForeignKey("SensorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Sensor");
+                });
+
             modelBuilder.Entity("DiplomaApi.Domain.Entities.TodoItem", b =>
                 {
                     b.HasOne("DiplomaApi.Domain.Entities.TodoList", "List")
@@ -410,6 +468,11 @@ namespace DiplomaApi.Infrastructure.Data.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("DiplomaApi.Domain.Entities.Sensor", b =>
+                {
+                    b.Navigation("Events");
                 });
 
             modelBuilder.Entity("DiplomaApi.Domain.Entities.TodoList", b =>

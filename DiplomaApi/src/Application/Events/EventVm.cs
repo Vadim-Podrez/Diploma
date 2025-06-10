@@ -2,4 +2,4 @@
 
 namespace DiplomaApi.Application.Events;
 
-public record EventVm(long Id, string SensorId, DateTime Timestamp, JsonElement Payload);
+public record EventVm(int Id, int SensorId, DateTime Timestamp, JsonElement Payload);

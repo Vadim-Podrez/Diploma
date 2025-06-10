@@ -15,18 +15,36 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>, IApplica
 
     public DbSet<TodoItem> TodoItems => Set<TodoItem>();
     public DbSet<Event> Events => Set<Event>();
+    
+    public DbSet<Sensor> Sensors { get; set; }
 
-    protected override void OnModelCreating(ModelBuilder builder)
+
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Підтягнути ВСІ конфігурації з поточної збірки
-        builder.ApplyConfigurationsFromAssembly(
+        modelBuilder.ApplyConfigurationsFromAssembly(
             typeof(ApplicationDbContext).Assembly);
         
-        builder.Entity<Event>()
-            .Property(e => e.Payload)
-            .HasColumnType("jsonb");       // явно вказуємо
+        modelBuilder.Entity<Sensor>(entity =>
+        {
+            entity.Property(e => e.Coords).HasColumnType("point");
+            entity.Property(e => e.Coverage).HasDefaultValue(0);
+            entity.Property(e => e.Status).HasDefaultValue("online");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+        });
+
+        modelBuilder.Entity<Event>(entity =>
+        {
+            entity.Property(e => e.Coords).HasColumnType("point");
+            entity.Property(e => e.Payload).HasColumnType("jsonb");
+
+            entity.HasOne(e => e.Sensor)
+                .WithMany(s => s.Events)
+                .HasForeignKey(e => e.SensorId);
+        });
         
-        base.OnModelCreating(builder);
-        builder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
+        base.OnModelCreating(modelBuilder);
+        modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
     }
 }
