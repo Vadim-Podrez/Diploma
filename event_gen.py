@@ -19,9 +19,9 @@ for i in range(5):  # 10 подій, або зроби while True для нес�
         "payload": {
             "type": random.choice(["rf", "audio", "video"]),
             "signal": random.randint(50, 100),
-            "alarm": random.choice([True, False])
+            "alarm": random.choice([True])
         }
     }
     publish.single("rf/events/test", json.dumps(msg), hostname="localhost", port=1883)
     print("Sent:", msg)
-    time.sleep(2)
+    time.sleep(0.2)

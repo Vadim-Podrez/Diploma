@@ -1141,9 +1141,11 @@
   </script> -->
   
 
-  <script>
+ <script>
+
   // Створити глобальну змінну для карти
   let map;
+  const sensorZones = {}; // sensorId → L.circle
 
   // Ініціалізувати карту після завантаження DOM
   document.addEventListener("DOMContentLoaded", function () {
@@ -1151,6 +1153,26 @@
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
+
+    const sensors = [
+      { id: 1, lat: 50.46, lng: 30.52, radius: 1200 },
+      { id: 2, lat: 50.48, lng: 30.50, radius: 2000 },
+      { id: 3, lat: 50.44, lng: 30.55, radius: 2000 },
+      { id: 4, lat: 50.50, lng: 30.60, radius: 1300 },
+      { id: 5, lat: 50.47, lng: 30.54, radius: 1000 },
+    ];
+
+     sensors.forEach(s => {
+      const circle = L.circle([s.lat, s.lng], {
+        color: 'green',
+        fillColor: '#0f3',
+        fillOpacity: 0.25,
+        radius: s.radius
+      }).addTo(map);
+
+      circle.bindPopup(`Sensor ID: ${s.id}`);
+      sensorZones[s.id] = { circle, radius: s.radius };
+    });
   });
 
   // Підключення до SignalR
@@ -1163,14 +1185,30 @@
   connection.on('newEvent', ev => {
     console.log('New event:', ev);
 
-    const lat = ev.coords.x;
-    const lng = ev.coords.y;
+    const { x, y } = ev.coords;
     const { type, signal, alarm } = ev.payload;
     const sensorId = ev.sensorId;
-
     const time = new Date().toLocaleTimeString();
 
-    const marker = L.marker([lat, lng]).addTo(map);
+  const sensor = sensorZones[sensorId]; 
+    if (sensor) {
+      const center = sensor.circle.getLatLng();
+      const dist = map.distance(center, L.latLng(x, y));
+      const radius = sensor.radius;
+
+      if (dist <= radius) {
+        const color = alarm ? 'red' : 'green';
+        const fillColor = alarm ? '#f03' : '#0f3';
+        sensor.circle.setStyle({ color, fillColor });
+      }
+    }
+
+    const marker = L.marker([x, y], {
+      radius: 6,
+      color: alarm ? 'red' : 'blue',
+      fillOpacity: 0.8
+    }).addTo(map);
+    
     marker.bindPopup(`
       <b>Подія:</b> ${type.toUpperCase()}<br>
       <b>Сигнал:</b> ${signal}<br>
