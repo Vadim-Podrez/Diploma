@@ -16,13 +16,22 @@
     content="bootstrap 5, bootstrap, bootstrap 5 admin dashboard, bootstrap 5 dashboard, bootstrap 5 charts, bootstrap 5 calendar, bootstrap 5 datepicker, bootstrap 5 tables, bootstrap 5 datatable, vanilla js datatable, colorlibhq, colorlibhq dashboard, colorlibhq admin dashboard" />
 
   <!-- Leaflet CSS & JS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <!-- <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <script src="https://unpkg.com/leaflet-semicircle@1.0.6/dist/leaflet-semicircle.min.js"></script> -->
+
+  <!-- Leaflet CSS & JS -->
+  <link  rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Semicircle -->
+  <script src="https://unpkg.com/leaflet-semicircle@2.0.4/Semicircle.js"></script>
 
   <!--end::Primary Meta Tags-->
   <!--begin::Fonts-->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/source-sans-3@5.0.12/index.css"
-    integrity="sha256-tXJfXfp6Ewt1ilPzLDtQnJV4hclT9XuaZUKyUvmyr+Q=" crossorigin="anonymous" />
+  <!-- <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/source-sans-3@5.0.12/index.css"
+    integrity="sha256-tXJfXfp6Ewt1ilPzLDtQnJV4hclT9XuaZUKyUvmyr+Q=" crossorigin="anonymous" /> -->
   <!--end::Fonts-->
   <!--begin::Third Party Plugin(OverlayScrollbars)-->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/overlayscrollbars@2.10.1/styles/overlayscrollbars.min.css"
@@ -43,6 +52,7 @@
     integrity="sha256-+uGLJmmTKOqBr+2E6KDYs/NRsHxSkONXFHUL0fy2O/4=" crossorigin="anonymous" />
 
   <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@7.0.5/dist/browser/signalr.min.js"></script>
+
 
 </head>
 <!--end::Head-->
@@ -812,12 +822,20 @@
               <div class="card text-white bg-primary bg-gradient border-primary mb-4">
                 <div class="card-header border-0">
                   <div class="card-header">
-                    <h3 class="card-title">Кількість виявлених дронів</h3>
-                  </div>z
+                    <h3 class="card-title">Event Log</h3>
+                  </div>
                   <div class="card-body">
-                    <div id="revenue-chart"></div>
+                    <div style="max-height:320px; overflow-y:auto;">
+                    <table class="table table-sm table-hover table-dark mb-0">
+                      <thead>
+                      <tr><th>#</th><th>Time</th><th>Sensor</th><th>Type</th>
+                      <th>Signal</th><th>Status</th><th>Lat</th><th>Lng</th></tr>
+                      </thead>
+                      <tbody id="event-log-body"></tbody>
+                    </table>
                   </div>
                 </div>
+              </div>
                 <!-- /.card -->
                 <!-- DIRECT CHAT -->
                 <!-- <div class="card direct-chat direct-chat-primary mb-4">
@@ -842,8 +860,8 @@
                       </button>
                     </div>
                   </div>
-                </div> -->
-              </div>
+                </div>
+              </div> -->
 
 
 
@@ -1143,9 +1161,24 @@
 
  <script>
 
-  // Створити глобальну змінну для карти
-  let map;
+  // Глобальна змінна для карти
+  let map, eventIdx = 1;
   const sensorZones = {}; // sensorId → L.circle
+
+
+  const cameraLayer  = L.layerGroup();
+  const cameras = [
+  { id: 'cam-1', lat: 50.461, lng: 30.531,
+    azimuth:  45,        // напрямок (° від півночі, за год. стрілкою)
+    fov:      70,        // ширина кута огляду, °
+    range:    900        // дальність, м
+  },
+  { id: 'cam-2', lat: 50.453, lng: 30.548,
+    azimuth: 320,
+    fov:      60,
+    range:   1100
+  }];
+
 
   // Ініціалізувати карту після завантаження DOM
   document.addEventListener("DOMContentLoaded", function () {
@@ -1154,24 +1187,73 @@
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    const sensors = [
-      { id: 1, lat: 50.46, lng: 30.52, radius: 1200 },
-      { id: 2, lat: 50.48, lng: 30.50, radius: 2000 },
-      { id: 3, lat: 50.44, lng: 30.55, radius: 2000 },
-      { id: 4, lat: 50.50, lng: 30.60, radius: 1300 },
-      { id: 5, lat: 50.47, lng: 30.54, radius: 1000 },
-    ];
+    cameraLayer.addTo(map);
+    
+   const sensors = [
+  { id: 1, type: 'radar', lat: 50.46, lng: 30.52, radius: 1200 },
+  { id: 2, type: 'audio', lat: 50.48, lng: 30.50, radius: 2000 },
+  { id: 3, type: 'radar', lat: 50.44, lng: 30.55, radius: 2000 },
+  { id: 4, type: 'radar', lat: 50.50, lng: 30.60, radius: 1300 },
+  { id: 5, type: 'audio', lat: 50.47, lng: 30.54, radius: 1000 },
+  ];
 
-     sensors.forEach(s => {
-      const circle = L.circle([s.lat, s.lng], {
-        color: 'green',
-        fillColor: '#0f3',
+    const radarIcon = L.divIcon({
+      html: `<img src="../../dist/assets/img/radar.svg" width="30" height="30">`,
+      iconSize:   [30, 30],
+      iconAnchor: [15, 15],
+      popupAnchor:[ 0, -15],
+      className: ''
+    });
+
+    const audioIcon = L.divIcon({
+      html: `<img src="../../dist/assets/img/audio.svg" width="30" height="30">`,
+      iconSize:[30,30], iconAnchor:[15,15], popupAnchor:[0,-15],
+      className:''
+    });
+    
+    const camIcon = L.icon({
+      iconUrl: '../../dist/assets/img/camera-web-svgrepo-com.svg', 
+      iconSize:   [30, 30],
+      iconAnchor: [15, 15],
+      popupAnchor:[ 0, -15]
+    });
+
+    sensors.forEach(s => {
+    const sensorIcon = (s.type === 'radar') ? radarIcon : audioIcon;
+
+    L.marker([s.lat, s.lng], { icon: sensorIcon })
+    .bindPopup(`<b>${s.type.toUpperCase()} Sensor #${s.id}</b>`)
+    .addTo(map);
+
+    const clr = (s.type === 'radar') ? '#18c718' : '#a866ff';  
+    const circle = L.circle([s.lat, s.lng], {
+        color: clr,
+        fillColor: clr,
         fillOpacity: 0.25,
         radius: s.radius
-      }).addTo(map);
+    }).addTo(map);
 
       circle.bindPopup(`Sensor ID: ${s.id}`);
       sensorZones[s.id] = { circle, radius: s.radius };
+    });
+
+    cameras.forEach(c => {
+      const m = L.marker([c.lat, c.lng], { icon: camIcon })
+                 .bindPopup(`<b>Камера ${c.id}</b>`)
+                 .addTo(cameraLayer);
+        
+    // 2. сектор FOV
+    const sector = L.semiCircle([c.lat,c.lng], {
+      radius: c.range,
+      startAngle: c.azimuth - c.fov/2,
+      stopAngle:  c.azimuth + c.fov/2,
+      color:'#2b90d9', fillColor:'#2b90d9', fillOpacity:0.2,
+      interactive:false
+    }).addTo(cameraLayer);
+
+    // 3. запам’ятовуємо (знадобиться далі)
+    c.marker = m;
+    c.sector = sector;             // можна зберегти для наступних кроків
     });
   });
 
@@ -1188,7 +1270,7 @@
     const { x, y } = ev.coords;
     const { type, signal, alarm } = ev.payload;
     const sensorId = ev.sensorId;
-    const time = new Date().toLocaleTimeString();
+    const time = new Date().toLocaleTimeString('uk-UA', { hour12:false });
 
   const sensor = sensorZones[sensorId]; 
     if (sensor) {
@@ -1216,6 +1298,25 @@
       <b>Sensor ID:</b> ${sensorId}<br>
       <b>Час:</b> ${time}
     `);
+
+    const tbody = document.getElementById('event-log-body');
+    if (tbody) {
+      const rowHtml = `
+      <tr>
+        <td>${eventIdx++}</td>
+        <td>${time}</td>
+        <td>${sensorId}</td>
+        <td>${type}</td>
+        <td>${signal}</td>
+        <td>${alarm
+              ? '<span class="badge bg-danger">ALARM</span>'
+              : '<span class="badge bg-success">OK</span>'}</td>
+        <td>${x.toFixed(4)}</td>
+        <td>${y.toFixed(4)}</td>
+      </tr>`;
+    tbody.insertAdjacentHTML('afterbegin', rowHtml);
+    if (tbody.rows.length > 200) tbody.deleteRow(-1);
+    }
   });
 
   async function startRealtime() {
@@ -1228,6 +1329,8 @@
   }
 
   startRealtime();
+
+
 </script>
 
 </body>
