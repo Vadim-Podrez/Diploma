@@ -808,7 +808,7 @@
                   <div class="card-header">
                     <h3 class="card-title">Drone Events Map</h3>
                   </div>
-                  <div class="card-body" style="height: 400px;">
+                  <div class="card-body" style="height: 700px;">
                     <div id="drone-map" style="width: 100%; height: 100%;"></div>
                   </div>
                 </div>
@@ -825,11 +825,11 @@
                     <h3 class="card-title">Event Log</h3>
                   </div>
                   <div class="card-body">
-                    <div style="max-height:320px; overflow-y:auto;">
+                    <div style="max-height:650px; overflow-y:auto;">
                     <table class="table table-sm table-hover table-dark mb-0">
                       <thead>
                       <tr><th>#</th><th>Time</th><th>Sensor</th><th>Type</th>
-                      <th>Signal</th><th>Status</th><th>Lat</th><th>Lng</th></tr>
+                      <th>Confidence</th><th>Level</th><th>Lat</th><th>Lng</th></tr>
                       </thead>
                       <tbody id="event-log-body"></tbody>
                     </table>
@@ -1119,83 +1119,121 @@
     const sparkline3 = new ApexCharts(document.querySelector('#sparkline-3'), option_sparkline3);
     sparkline3.render();
   </script>
-  <!--end::Script-->
-
-  <!-- <script>
-    document.addEventListener("DOMContentLoaded", function () {
-      var map = L.map('drone-map').setView([50.4501, 30.5234], 11); // Координати Києва
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
-      }).addTo(map);
-
-      // Функція для генерації випадкових координат у межах Києва
-      function getRandomCoords() {
-        // Київ: широта 50.34 - 50.52, довгота 30.40 - 30.66
-        var lat = 50.34 + Math.random() * (50.52 - 50.34);
-        var lon = 30.40 + Math.random() * (30.66 - 30.40);
-        return [lat, lon];
-      }
-
-      // Функція для додавання нової мітки
-      function addDroneDetection() {
-        var coords = getRandomCoords();
-        var time = new Date().toLocaleTimeString();
-        var marker = L.marker(coords).addTo(map);
-        marker.bindPopup(
-          `<b>Подія:</b> Виявлення дрона<br>
-         <b>Час:</b> ${time}<br>
-         <b>Координати:</b> ${coords[0].toFixed(5)}, ${coords[1].toFixed(5)}`
-        );
-        // Вивести в консоль
-        console.log(`[${time}] Виявлено дрон: (${coords[0].toFixed(5)}, ${coords[1].toFixed(5)})`);
-      }
-
-      // Додати першу мітку одразу
-      addDroneDetection();
-
-      // Додавати нову мітку кожні 12 секунд
-      setInterval(addDroneDetection, 12000);
-    });
-  </script> -->
-  
-
- <script>
-
-  // Глобальна змінна для карти
-  let map, eventIdx = 1;
-  const sensorZones = {}; // sensorId → L.circle
 
 
-  const cameraLayer  = L.layerGroup();
+
+
+
+<script>
+/* =========== 1.   Глобальні змінні =========== */
+let map, eventIdx = 1;
+const sensorZones = {};          // sensorId → {circle, radius}
+
+
+/* ——— налаштування ——— */
+const BUFFER_MS    = 30_000;          // тримаємо 30 с історії
+const CELL_SIZE_M  = 250;             // “квадрат” ≈ 250 м
+const DEG_PER_M    = 1 / 111_320;     // 1 м у градусах (спрощено для Києва)
+const CELL_DEG     = CELL_SIZE_M * DEG_PER_M;
+
+/* ——— структура буфера ——— */
+const buf = []; // [{ts, cellKey, type, alarm, lat, lng}, …]
+
+/** Повертає ключ «ґрід-комірки» для заданих координат. */
+function cellKey(lat, lng) {
+  return `${Math.floor(lat / CELL_DEG)}:${Math.floor(lng / CELL_DEG)}`;
+}
+
+/** Обрізає з буфера записи, давніші за BUFFER_MS. */
+function pruneBuffer(now) {
+  const cut = now - BUFFER_MS;
+  while (buf.length && buf[0].ts < cut) buf.shift();
+}
+
+/**
+ * Визначає рівень загрози у заданій комірці.
+ *  • Detection — є хоча б один `alarm:true`
+ *  • Alert     — ≥ 4 події за вікно BUFFER_MS
+ *  • Event     — решта
+ */
+function levelForCell(cell, now) {
+  const recent = buf.filter(e => e.cellKey === cell && now - e.ts < BUFFER_MS);
+
+  if (!recent.length)        return 'Event';
+  if (recent.some(e => e.alarm)) return 'Detection';
+  if (recent.length >= 4)    return 'Alert';
+  return 'Event';
+}
+
+function colorByLevel(lvl){
+  switch(String(lvl).toLowerCase()){
+    case 'detection': return '#e10600';     // 🔴
+    case 'alert':     return '#ffbe00';     // 🟡
+    default:          return '#9e9e9e';     // ⚪
+  }
+}
+function badgeHtml(lvl){
+  return lvl==='Detection' ? '<span class="badge bg-danger">Detection</span>' :
+         lvl==='Alert'     ? '<span class="badge bg-warning text-dark">Alert</span>' :
+                             '<span class="badge bg-secondary">Event</span>';
+}
+
+
+/* =========== 3.   Ініціалізація Leaflet =========== */
+const cameraLayer = L.layerGroup();
+
   const cameras = [
-  { id: 'cam-1', lat: 50.461, lng: 30.531,
-    azimuth:  45,        // напрямок (° від півночі, за год. стрілкою)
-    fov:      70,        // ширина кута огляду, °
-    range:    900        // дальність, м
-  },
-  { id: 'cam-2', lat: 50.453, lng: 30.548,
-    azimuth: 320,
-    fov:      60,
-    range:   1100
-  }];
+  { id: 'cam-1', lat: 50.461, lng: 30.531, azimuth:  45, fov: 70,  range:  900 },
+  { id: 'cam-2', lat: 50.453, lng: 30.548, azimuth: 320, fov: 60,  range: 1100 },
+  { id: 'cam-3', lat: 50.520, lng: 30.580, azimuth:  10, fov: 65,  range:  800 },
+  { id: 'cam-4', lat: 50.500, lng: 30.350, azimuth: 200, fov: 70,  range:  900 }
+];
+
+const sensors = [
+  /* Центральна зона */
+  { id:  1, type: 'radar', lat: 50.460, lng: 30.520, radius: 1200 },
+  { id:  2, type: 'audio', lat: 50.480, lng: 30.500, radius: 2000 },
+  { id:  3, type: 'radar', lat: 50.440, lng: 30.550, radius: 2000 },
+  { id:  4, type: 'radar', lat: 50.500, lng: 30.600, radius: 1300 },
+  { id:  5, type: 'audio', lat: 50.470, lng: 30.540, radius: 1000 },
+
+  /* Північ (Оболонь → Пуща-Водиця) */
+  { id:  6, type: 'radar', lat: 50.540, lng: 30.510, radius: 2500 },
+  { id:  8, type: 'audio', lat: 50.560, lng: 30.450, radius: 1500 },
+
+  /* Північний схід (Троєщина → Бровари) */
+  { id:  9, type: 'radar', lat: 50.520, lng: 30.660, radius: 2200 },
+  { id: 10, type: 'radar', lat: 50.530, lng: 30.700, radius: 2800 },
+
+  /* Захід (Святошин → Ірпінь/Буча) */
+  { id: 12, type: 'audio', lat: 50.490, lng: 30.380, radius: 1200 },
+
+  /* Південний захід (Вишневе → Гатне) */
+  { id: 13, type: 'radar', lat: 50.390, lng: 30.380, radius: 2500 },
+  { id: 14, type: 'radar', lat: 50.410, lng: 30.420, radius: 2000 },
+
+  /* Південь (Голосіїв → Конча-Заспа) */
+  { id: 15, type: 'audio', lat: 50.350, lng: 30.500, radius: 1800 },
+  { id: 16, type: 'radar', lat: 50.330, lng: 30.580, radius:  850 },
+
+  /* Південний схід (Дарниця → Бориспіль) */
+  { id: 17, type: 'radar', lat: 50.380, lng: 30.690, radius: 2300 },
+  { id: 18, type: 'radar', lat: 50.400, lng: 30.740, radius: 2600 },
+
+  /* Зовнішній пояс */
+  { id: 19, type: 'audio', lat: 50.600, lng: 30.600, radius: 1600 },
+  { id: 20, type: 'radar', lat: 50.300, lng: 30.350, radius: 2400 }
+];
+
 
 
   // Ініціалізувати карту після завантаження DOM
-  document.addEventListener("DOMContentLoaded", function () {
+    document.addEventListener("DOMContentLoaded", function () {
     map = L.map('drone-map').setView([50.4501, 30.5234], 11); // Київ
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
-
     cameraLayer.addTo(map);
-    
-   const sensors = [
-  { id: 1, type: 'radar', lat: 50.46, lng: 30.52, radius: 1200 },
-  { id: 2, type: 'audio', lat: 50.48, lng: 30.50, radius: 2000 },
-  { id: 3, type: 'radar', lat: 50.44, lng: 30.55, radius: 2000 },
-  { id: 4, type: 'radar', lat: 50.50, lng: 30.60, radius: 1300 },
-  { id: 5, type: 'audio', lat: 50.47, lng: 30.54, radius: 1000 },
-  ];
 
     const radarIcon = L.divIcon({
       html: `<img src="../../dist/assets/img/radar.svg" width="30" height="30">`,
@@ -1217,6 +1255,10 @@
       iconAnchor: [15, 15],
       popupAnchor:[ 0, -15]
     });
+    
+
+
+
 
     sensors.forEach(s => {
     const sensorIcon = (s.type === 'radar') ? radarIcon : audioIcon;
@@ -1232,7 +1274,6 @@
         fillOpacity: 0.25,
         radius: s.radius
     }).addTo(map);
-
       circle.bindPopup(`Sensor ID: ${s.id}`);
       sensorZones[s.id] = { circle, radius: s.radius };
     });
@@ -1241,8 +1282,7 @@
       const m = L.marker([c.lat, c.lng], { icon: camIcon })
                  .bindPopup(`<b>Камера ${c.id}</b>`)
                  .addTo(cameraLayer);
-        
-    // 2. сектор FOV
+
     const sector = L.semiCircle([c.lat,c.lng], {
       radius: c.range,
       startAngle: c.azimuth - c.fov/2,
@@ -1251,85 +1291,94 @@
       interactive:false
     }).addTo(cameraLayer);
 
-    // 3. запам’ятовуємо (знадобиться далі)
-    c.marker = m;
-    c.sector = sector;             // можна зберегти для наступних кроків
     });
   });
 
-  // Підключення до SignalR
-  const connection = new signalR.HubConnectionBuilder()
-    .withUrl("http://localhost:8080/eventHub")
-    .configureLogging(signalR.LogLevel.Information)
-    .withAutomaticReconnect()
-    .build();
+/* ----------------- SignalR ----------------- */
+const connection = new signalR.HubConnectionBuilder()
+  .withUrl("http://localhost:8080/eventHub")
+  .configureLogging(signalR.LogLevel.Information)
+  .withAutomaticReconnect()
+  .build();
 
-  connection.on('newEvent', ev => {
-    console.log('New event:', ev);
+/* 1️⃣  слухаємо саме 'newevent' (нижній регістр) */
+connection.on('newevent', ev => {
+  console.log('New event:', ev);
+  // 2️⃣  правильні імена полів  X  /  Y
+  const { x, X, y, Y } = ev.coords;
+  const lat = X ?? x;           // підтримуємо обидва варіанти
+  const lng = Y ?? y;
+  if(lat===undefined||lng===undefined) return;   // захист від «кривих» пакетів
 
-    const { x, y } = ev.coords;
-    const { type, signal, alarm } = ev.payload;
-    const sensorId = ev.sensorId;
-    const time = new Date().toLocaleTimeString('uk-UA', { hour12:false });
+  const { type, signal, alarm=false } = ev.payload;
+  const sensorId = ev.sensorId;
+  //const time = new Date().toLocaleTimeString('uk-UA', { hour12:false });
 
-  const sensor = sensorZones[sensorId]; 
-    if (sensor) {
-      const center = sensor.circle.getLatLng();
-      const dist = map.distance(center, L.latLng(x, y));
-      const radius = sensor.radius;
-
-      if (dist <= radius) {
-        const color = alarm ? 'red' : 'green';
-        const fillColor = alarm ? '#f03' : '#0f3';
-        sensor.circle.setStyle({ color, fillColor });
-      }
-    }
-
-    const marker = L.marker([x, y], {
-      radius: 6,
-      color: alarm ? 'red' : 'blue',
-      fillOpacity: 0.8
-    }).addTo(map);
-    
-    marker.bindPopup(`
-      <b>Подія:</b> ${type.toUpperCase()}<br>
-      <b>Сигнал:</b> ${signal}<br>
-      <b>Alarm:</b> ${alarm}<br>
-      <b>Sensor ID:</b> ${sensorId}<br>
-      <b>Час:</b> ${time}
-    `);
-
-    const tbody = document.getElementById('event-log-body');
-    if (tbody) {
-      const rowHtml = `
-      <tr>
-        <td>${eventIdx++}</td>
-        <td>${time}</td>
-        <td>${sensorId}</td>
-        <td>${type}</td>
-        <td>${signal}</td>
-        <td>${alarm
-              ? '<span class="badge bg-danger">ALARM</span>'
-              : '<span class="badge bg-success">OK</span>'}</td>
-        <td>${x.toFixed(4)}</td>
-        <td>${y.toFixed(4)}</td>
-      </tr>`;
-    tbody.insertAdjacentHTML('afterbegin', rowHtml);
-    if (tbody.rows.length > 200) tbody.deleteRow(-1);
-    }
-  });
-
-  async function startRealtime() {
-    try {
-      await connection.start();
-      console.log('SignalR connected!');
-    } catch (error) {
-      console.error('SignalR error:', error);
-    }
+  /* --- буфер / рівень --- */
+  const now  = Date.now();
+  const cell = cellKey(lat,lng);
+  buf.push({ ts: now, cellKey: cell, type, alarm, lat, lng });
+  pruneBuffer(now);
+  const level = levelForCell(cell,now);
+  const clr   = colorByLevel(level);
+  
+  /* --- підфарбовуємо коло сенсора, якщо подія всередині радіуса --- */
+  const sz = sensorZones[sensorId];
+  if(sz && map.distance(sz.circle.getLatLng(),[lat,lng])<=sz.radius){
+    sz.circle.setStyle({color:clr,fillColor:clr});
   }
 
-  startRealtime();
+  /* --- маркер події --- */
+  L.circleMarker([lat,lng],{radius:6,color:clr,fillColor:clr,fillOpacity:0.9})
+    .addTo(map)
+    .bindPopup(`<b>${level}</b><br>Type: ${type}<br>Signal: ${signal}%`);
 
+  /* --- рядок журналу --- */
+  const tbody = document.getElementById('event-log-body');
+  if(tbody){
+    const tStr = new Date(now).toLocaleTimeString('uk-UA',{hour12:false});
+    tbody.insertAdjacentHTML('afterbegin',`
+      <tr>
+        <td>${eventIdx++}</td><td>${tStr}</td><td>${sensorId}</td><td>${type}</td>
+        <td>${signal}%</td><td>${badgeHtml(level)}</td>
+        <td>${lat.toFixed(5)}</td><td>${lng.toFixed(5)}</td>
+      </tr>`);
+    if(tbody.rows.length>200) tbody.deleteRow(-1);
+  }
+});
+
+/* -------- запуск -------- */
+connection.start()
+  .then(() => console.log('SignalR connected'))
+  .catch(err => console.error('SignalR error', err));
+
+//   const tbody = document.getElementById('event-log-body');
+//   if (tbody) {
+//     tbody.insertAdjacentHTML('afterbegin', `
+//       <tr>
+//         <td>${eventIdx++}</td>
+//         <td>${time}</td>
+//         <td>${sensorId}</td>
+//         <td>${type}</td>
+//         <td>${signal}%</td>
+//         <td>${badge}</td>
+//         <td>${x.toFixed(5)}</td>
+//         <td>${y.toFixed(5)}</td>
+//       </tr>`);
+//     if (tbody.rows.length > 200) tbody.deleteRow(-1);
+//   }
+// });
+  
+//startRealtime();
+
+  // async function startRealtime() {
+  //   try {
+  //     await connection.start();
+  //     console.log('SignalR connected!');
+  //   } catch (error) {
+  //     console.error('SignalR error:', error);
+  //   }
+  // }
 
 </script>
 
