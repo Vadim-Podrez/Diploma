@@ -35,7 +35,7 @@ public sealed class MqttListener : BackgroundService
         using var client = factory.CreateMqttClient();
 
         var opts = new MqttClientOptionsBuilder()
-            .WithTcpServer("mosquitto", 1883)    // name із docker-compose
+            .WithTcpServer("mosquitto", 1883)    
             .Build();
 
         // 1. підключення
@@ -60,28 +60,15 @@ public sealed class MqttListener : BackgroundService
                 var dto = JsonSerializer.Deserialize<EventDto>(
                     json, 
                     new JsonSerializerOptions { PropertyNameCaseInsensitive = true }); 
-                if (dto is null)                         // ← захист від некоректного JSON  
+                if (dto is null)                           
                 {
                     _logger.LogWarning("Received invalid MQTT payload: {Json}", json);
-                    return;                               // пропускаємо цей пакет
+                    return;                               
                 }
 
                 await using var scope = _sp.CreateAsyncScope();
                 var db  = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
                 var hub = scope.ServiceProvider.GetRequiredService<IHubContext<EventHub>>();
-
-                
-                /*NpgsqlPoint coords = default;
-                if (dto.Payload.TryGetProperty("coords", out var coordsProp) && coordsProp.GetArrayLength() == 2)
-                {
-                    var lat = coordsProp[0].GetDouble();
-                    var lng = coordsProp[1].GetDouble();
-                    coords = new NpgsqlPoint(lat, lng);
-                }
-                else
-                {
-                    coords = new NpgsqlPoint(0, 0);
-                }*/
                 
                 db.Events.Add(new Event
                 {
